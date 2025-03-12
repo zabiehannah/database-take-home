@@ -19,7 +19,6 @@ from scripts.constants import (
     MAX_TOTAL_EDGES,
 )
 
-
 def load_graph(graph_file):
     """Load graph from a JSON file."""
     with open(graph_file, "r") as f:
@@ -93,11 +92,6 @@ def optimize_graph(
     """
     print("Starting graph optimization...")
 
-    # Create a copy of the initial graph to modify
-    optimized_graph = {}
-    for node, edges in initial_graph.items():
-        optimized_graph[node] = dict(edges)
-
     # =============================================================
     # TODO: Implement your optimization strategy here
     # =============================================================
@@ -126,36 +120,42 @@ def optimize_graph(
     # This is just a basic example - you should implement a more
     # sophisticated strategy based on query analysis!
     # ---------------------------------------------------------------
+    freq = Counter()
+    for entry in results.get('detailed_results', []):
+        target = str(entry.get('target'))
+        freq[target] += 1
+    key_nodes = sorted(freq.keys(), key=lambda node: freq[node], reverse=True)
+    if not key_nodes:
+        key_nodes = [str(i) for i in range(10)]
 
-    # Count total edges in the initial graph
-    total_edges = sum(len(edges) for edges in optimized_graph.values())
+    threshold = 50
+    primary_candidates = [node for node in key_nodes if int(node) < threshold]
+    if not primary_candidates:
+        primary_candidates = [str(i) for i in range(10)]
+    if len(primary_candidates) < 2:
+        primary_candidates *= 2
 
-    # If we exceed the limit, we need to prune edges
-    if total_edges > max_total_edges:
-        print(
-            f"Initial graph has {total_edges} edges, need to remove {total_edges - max_total_edges}"
-        )
+    optimized_graph = {node: {} for node in initial_graph.keys()}
 
-        # Example pruning logic (replace with your optimized strategy)
-        edges_to_remove = total_edges - max_total_edges
-        removed = 0
+    for i in range(len(primary_candidates)):
+        current = primary_candidates[i]
+        next_node = primary_candidates[(i + 1) % len(primary_candidates)]
+        optimized_graph[current][next_node] = 1
 
-        # Sort nodes by number of outgoing edges (descending)
-        nodes_by_edge_count = sorted(
-            optimized_graph.keys(), key=lambda n: len(optimized_graph[n]), reverse=True
-        )
+    secondary = sorted([node for node in initial_graph.keys() if int(node) < threshold and node not in primary_candidates],
+                       key=lambda node: int(node))
+    if secondary:
+        for i in range(len(secondary)):
+            current = secondary[i]
+            next_node = secondary[(i + 1) % len(secondary)]
+            optimized_graph[current][next_node] = 1
+        optimized_graph[secondary[-1]][primary_candidates[0]] = 1
 
-        # Remove edges from nodes with the most connections first
-        for node in nodes_by_edge_count:
-            if removed >= edges_to_remove:
-                break
+    for node in initial_graph.keys():
+        if int(node) >= threshold:
+            optimized_graph[node][primary_candidates[0]] = 1
 
-            # As a simplistic example, remove the edge with lowest weight
-            if len(optimized_graph[node]) > 1:  # Ensure node keeps at least one edge
-                # Find edge with minimum weight
-                min_edge = min(optimized_graph[node].items(), key=lambda x: x[1])
-                del optimized_graph[node][min_edge[0]]
-                removed += 1
+    optimized_graph[primary_candidates[-1]][primary_candidates[0]] = 4
 
     # =============================================================
     # End of your implementation
